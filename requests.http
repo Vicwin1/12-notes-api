@@ -1,0 +1,130 @@
+@baseUrl = http://localhost:3000
+@expiredToken = replace-with-a-valid-HS256-token-that-has-expired
+
+### Register
+# @name register
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Ada Lovelace",
+  "email": "ada@example.com",
+  "password": "NotesPassword123"
+}
+
+### Login (captures the token for requests below)
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "ada@example.com",
+  "password": "NotesPassword123"
+}
+
+### Current user
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{login.response.body.token}}
+
+### Create a note
+# @name createNote
+POST {{baseUrl}}/api/notes
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "First note",
+  "body": "A note created from requests.http",
+  "tags": ["work", "ideas"],
+  "pinned": false
+}
+
+### List notes with optional filters and pagination
+GET {{baseUrl}}/api/notes?q=note&tag=work&pinned=false&page=1&limit=10
+Authorization: Bearer {{login.response.body.token}}
+
+### Get a note
+GET {{baseUrl}}/api/notes/{{createNote.response.body.note.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### Update a note
+PATCH {{baseUrl}}/api/notes/{{createNote.response.body.note.id}}
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Updated first note",
+  "pinned": true
+}
+
+### Delete a note
+DELETE {{baseUrl}}/api/notes/{{createNote.response.body.note.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### Create a second user (for ownership failure examples)
+# @name otherRegister
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Another User",
+  "email": "another@example.com",
+  "password": "OtherPassword123"
+}
+
+### Create a note as the second user
+# @name otherCreateNote
+POST {{baseUrl}}/api/notes
+Authorization: Bearer {{otherRegister.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Another user's private note",
+  "body": "The first user must not be able to access this."
+}
+
+### Failure: missing token
+GET {{baseUrl}}/api/notes
+
+### Failure: garbled token
+GET {{baseUrl}}/api/notes
+Authorization: Bearer not.a.valid.jwt
+
+### Failure: expired token
+# Replace @expiredToken above with a locally generated, correctly signed expired HS256 JWT.
+# Run locally from the project root:
+# node --env-file=.env --input-type=module -e 'import jwt from "jsonwebtoken"; console.log(jwt.sign({ sub: "test-user", exp: 1 }, process.env.JWT_SECRET, { algorithm: "HS256" }))'
+# Never paste a production JWT secret or token into a shared requests.http file.
+GET {{baseUrl}}/api/notes
+Authorization: Bearer {{expiredToken}}
+
+### Failure: another user's note (set the ID to a note created by a different account)
+GET {{baseUrl}}/api/notes/{{otherCreateNote.response.body.note.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### Failure: invalid note ID
+GET {{baseUrl}}/api/notes/not-a-uuid
+Authorization: Bearer {{login.response.body.token}}
+
+### Failure: invalid note body
+POST {{baseUrl}}/api/notes
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "",
+  "body": "Invalid title"
+}
+
+### Failure: invalid pagination
+GET {{baseUrl}}/api/notes?page=0&limit=101
+Authorization: Bearer {{login.response.body.token}}
+
+### Failure: invalid login credentials
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "ada@example.com",
+  "password": "incorrect"
+}
